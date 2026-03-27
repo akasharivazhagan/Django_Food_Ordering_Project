@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h3 class="mb-4">🛒 Your Cart</h3>
+
+<table class="table table-bordered">
+  <thead class="table-dark">
+    <tr>
+      <th>Food</th>
+      <th>Quantity</th>
+      <th>Price</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.food.name }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>₹{{ item.food.price }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="text-end">
+  <h4>Total: ₹{{ order.total_price }}</h4>
+  <a href="/payment/" class="btn btn-success">Proceed to Payment</a>
+</div>
+
+{% endblock %}

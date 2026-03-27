@@ -9,11 +9,7 @@ class PaymentView(APIView):
         order = Order.objects.get(id=request.data['order_id'])
 
         # Payment create
-        Payment.objects.create(
-            order=order,
-            amount=order.total_price,
-            status='Success'
-        )
+        Payment.objects.create(order=order,amount=order.total_price,status='Success')
 
         order.status = 'COMPLETED'
         order.save()

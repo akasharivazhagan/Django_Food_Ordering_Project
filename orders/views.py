@@ -30,7 +30,8 @@ class AddToCart(APIView):
         return Response({
             'order_id': order.id,
             'total': total
-        }) 
+        })   
+         
 
 class Cart(APIView):
     def get(self, request):
