@@ -1,32 +1,20 @@
 from celery import shared_task
+from django.core.mail import send_mail
 from .models import Order
-from payments.models import Payment
 
-# 👉 Order processing task
+
 @shared_task
-def process_order(order_id):
-    print(f"🔥 Order Processing Started: {order_id}")
-
+def send_order_email(order_id):
     order = Order.objects.get(id=order_id)
 
-    # Only update if still processing
-    if order.status == 'PROCESSING':
-        order.status = 'PROCESSING'
-        order.save()
+    subject = "Order Confirmation"
+    message = f"Your order #{order.id} is placed successfully. Total: {order.total_amount}"
 
-    print(f"✅ Order {order_id} moved to PROCESSING")
+    send_mail(
+        subject,
+        message,
+        'your_email@gmail.com',
+        [order.user.email]
+    )
 
-
-# 👉 Payment processing task
-@shared_task
-def process_payment(order_id):
-    print(f"💰 Payment Processing Started: {order_id}")
-
-    order = Order.objects.get(id=order_id)
-
-    # Final status update
-    if order.status == 'CONFIRMED':
-        order.status = 'COMPLETED'
-        order.save()
-        
-    print(f"✅ Order {order_id} is COMPLETED")
+    return "Email Sent"

@@ -1,76 +1,91 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404
-from .tasks import process_order
-from .models import Order, OrderItem
-from food.models import Food
+from .models import Cart, CartItem, Order, OrderItem
+from .serializers import CartSerializer, AddToCartSerializer, OrderSerializer
+from restaurants.models import Food
+from .tasks import send_order_email
 
-class CreateOrder(APIView):
+
+# 🛒 Add to Cart
+class AddToCartView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            food_id = request.data.get('food_id')
-            food = get_object_or_404(Food, id=food_id)
+        serializer = AddToCartSerializer(data=request.data)
 
-            # ✅ Check existing PENDING order
-            order = Order.objects.filter(user=request.user,status='PROCESSING').first()
+        if serializer.is_valid():
+            food_id = serializer.validated_data['food_id']
+            quantity = serializer.validated_data['quantity']
 
-            # ✅ If not exist → create new
-            if not order:
-                order = Order.objects.create(user=request.user,status='PROCESSING')
+            food = Food.objects.get(id=food_id)
 
-            # ✅ Add / update item
-            item, created = OrderItem.objects.get_or_create(
-                order=order,
-                food=food,
-                defaults={'quantity': 1}
+            cart, _ = Cart.objects.get_or_create(user=request.user)
+
+            item, created = CartItem.objects.get_or_create(
+                cart=cart, food=food
             )
 
             if not created:
-                item.quantity += 1
-                item.save()
+                item.quantity += quantity
+            else:
+                item.quantity = quantity
 
-            # ✅ Calculate total
-            total = sum(i.food.price * i.quantity for i in order.orderitem_set.all())
-            order.total_price = total
-            order.save()
-            
-            #send_order_email.delay(order.user.email, order.id, order.status)
-            
-            process_order.delay(order.id)
+            item.save()
 
-            return Response({
-                "message": "Item added to cart",
-                "order_id": order.id,
-                "total": order.total_price,
-                "status": order.status
-            })
+            return Response({"message": "Added to cart"})
 
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
-               
-                
-class Cart(APIView):
+        return Response(serializer.errors)
+
+
+# 👀 View Cart
+class ViewCartView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        order = Order.objects.filter(user=request.user, status='PROCESSING').first()
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        serializer = CartSerializer(cart)
+        return Response(serializer.data)
 
-        if not order:
-            return Response({'items': [], 'total': 0})
 
-        items = [
-            {
-                'food': i.food.name,
-                'qty': i.quantity,
-                'price': i.food.price
-            }
-            for i in order.orderitem_set.all()
-        ]
+# 📦 Create Order
+class CreateOrderView(APIView):
+    permission_classes = [IsAuthenticated]
 
-        return Response({
-            'items': items,
-            'total': order.total_price
-        })
+    def post(self, request):
+        cart = Cart.objects.get(user=request.user)
+        items = cart.items.all()
+
+        total = 0
+
+        order = Order.objects.create(user=request.user, total_amount=0)
+
+        for item in items:
+            total += item.food.price * item.quantity
+
+            OrderItem.objects.create(
+                order=order,
+                food=item.food,
+                quantity=item.quantity,
+                price=item.food.price
+            )
+
+        order.total_amount = total
+        order.save()
+        
+        send_order_email.delay(order.id)
+
+        # clear cart
+        items.delete()
+
+        return Response({"message": "Order created", "order_id": order.id})
+
+
+# 📜 Order List
+class OrderListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        orders = Order.objects.filter(user=request.user)
+        serializer = OrderSerializer(orders, many=True)
+        return Response(serializer.data)
