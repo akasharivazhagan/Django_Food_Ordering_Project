@@ -14,6 +14,8 @@ class FoodCreateView(CreateAPIView):  #POST
     serializer_class = FoodSerializer
     
 
+    
+
 #APIView (Manual):   
 
 
