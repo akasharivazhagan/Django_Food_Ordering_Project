@@ -7,6 +7,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .serializers import RegisterSerializer,AdminRegisterSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import AdminLoginSerializer
+
 
 class RegisterView(APIView):
 
@@ -28,6 +31,9 @@ class AdminRegisterView(APIView):
 
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "Admin Created"})
+            return Response({"message": "Admin Registered Successfully"}, status=201)
 
-        return Response(serializer.errors)
+        return Response(serializer.errors, status=400)
+    
+class AdminLoginView(TokenObtainPairView):
+    serializer_class = AdminLoginSerializer

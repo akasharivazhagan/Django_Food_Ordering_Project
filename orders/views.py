@@ -2,8 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Cart, CartItem, Order, OrderItem
-from .serializers import CartSerializer, AddToCartSerializer, OrderSerializer
-from restaurants.models import Food
+from .serializers import CartSerializer, AddToCartSerializer, OrderSerializer,CreateOrderSerializer
+from restaurants.models import Food,Restaurant
 from .tasks import send_order_email
 
 
@@ -15,15 +15,26 @@ class AddToCartView(APIView):
         serializer = AddToCartSerializer(data=request.data)
 
         if serializer.is_valid():
+            restaurant_id = serializer.validated_data['restaurant_id']
             food_id = serializer.validated_data['food_id']
             quantity = serializer.validated_data['quantity']
 
+            restaurant = Restaurant.objects.get(id=restaurant_id)
             food = Food.objects.get(id=food_id)
 
-            cart, _ = Cart.objects.get_or_create(user=request.user)
+            # 🔥 Ensure food belongs to selected restaurant
+            if food.restaurant.id != restaurant.id:
+                return Response({"error": "Food not from selected restaurant"})
+
+            # 🛒 Get or create cart for that restaurant
+            cart, _ = Cart.objects.get_or_create(
+                user=request.user,
+                restaurant=restaurant
+            )
 
             item, created = CartItem.objects.get_or_create(
-                cart=cart, food=food
+                cart=cart,
+                food=food
             )
 
             if not created:
@@ -33,10 +44,12 @@ class AddToCartView(APIView):
 
             item.save()
 
-            return Response({"message": "Added to cart"})
+            return Response({
+                "message": "Added to cart",
+                "cart_id": cart.id
+            })
 
         return Response(serializer.errors)
-
 
 # 👀 View Cart
 class ViewCartView(APIView):
@@ -46,41 +59,104 @@ class ViewCartView(APIView):
         cart, _ = Cart.objects.get_or_create(user=request.user)
         serializer = CartSerializer(cart)
         return Response(serializer.data)
+    
+class ViewCartView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        carts = Cart.objects.filter(user=request.user)
 
+        data = []
+        for cart in carts:
+            items = cart.items.all()
+            data.append({
+                "cart_id": cart.id,
+                "restaurant": cart.restaurant.name,
+                "items": [
+                    {
+                        "food": item.food.name,
+                        "quantity": item.quantity
+                    } for item in items
+                ]
+            })
+
+        return Response(data)   
+    
+    
 # 📦 Create Order
 class CreateOrderView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        cart = Cart.objects.get(user=request.user)
-        items = cart.items.all()
+        serializer = CreateOrderSerializer(data=request.data)
 
-        total = 0
+        if serializer.is_valid():
+            cart_id = serializer.validated_data['cart_id']
 
-        order = Order.objects.create(user=request.user, total_amount=0)
+            cart = Cart.objects.get(id=cart_id, user=request.user)
+            items = cart.items.all()
 
-        for item in items:
-            total += item.food.price * item.quantity
+            total = 0
 
-            OrderItem.objects.create(
-                order=order,
-                food=item.food,
-                quantity=item.quantity,
-                price=item.food.price
+            order = Order.objects.create(
+                user=request.user,
+                cart=cart,
+                total_amount=0
             )
 
-        order.total_amount = total
-        order.save()
-        
-        send_order_email.delay(order.id)
+            for item in items:
+                total += item.food.price * item.quantity
 
-        # clear cart
-        items.delete()
+                OrderItem.objects.create(
+                    order=order,
+                    food=item.food,
+                    quantity=item.quantity,
+                    price=item.food.price
+                )
 
-        return Response({"message": "Order created", "order_id": order.id})
+            order.total_amount = total
+            order.save()
+            
+            send_order_email.delay(order.id)
 
+            # clear cart
+            items.delete()
 
+            return Response({
+                "message": "Order created",
+                "order_id": order.id
+            })
+
+        return Response(serializer.errors)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 # 📜 Order List
 class OrderListView(APIView):
     permission_classes = [IsAuthenticated]

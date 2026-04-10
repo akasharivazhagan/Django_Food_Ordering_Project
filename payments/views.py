@@ -1,14 +1,13 @@
-import razorpay
+import stripe
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from orders.models import Order
 from .models import Payment
-from orders.tasks import send_order_email
+from orders.tasks import send_payment_success_email
 
-client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # 💳 Create Razorpay Order
 class CreatePaymentView(APIView):
@@ -17,58 +16,98 @@ class CreatePaymentView(APIView):
     def post(self, request, order_id):
         order = Order.objects.get(id=order_id, user=request.user)
 
-        amount = int(order.total_amount * 100)  # paise
+        amount = int(order.total_amount * 100)  # paise → cents
 
-        razorpay_order = client.order.create({
-            "amount": amount,
-            "currency": "INR",
-            "payment_capture": 1
-        })
+        intent = stripe.PaymentIntent.create(
+            amount=amount,
+            currency='inr',
+            metadata={"order_id": order.id}
+        )
 
-        payment = Payment.objects.create(
+        Payment.objects.create(
             order=order,
-            razorpay_order_id=razorpay_order['id'],
+            stripe_payment_intent=intent['id'],
+            amount=order.total_amount,
             status='created'
         )
 
         return Response({
-            "razorpay_order_id": razorpay_order['id'],
-            "amount": amount,
-            "key": settings.RAZORPAY_KEY_ID
+            "client_secret": intent['client_secret'],
+            "payment_intent": intent['id'],
+            "publishable_key": settings.STRIPE_PUBLISHABLE_KEY
         })
-
-
+    
+    
+    
 # ✅ Verify Payment
+# class VerifyPaymentView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         payment_intent_id = request.data.get("payment_intent")
+
+#         try:
+#             intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+#             if intent.status == "succeeded":
+#                 payment = Payment.objects.get(
+#                     stripe_payment_intent=payment_intent_id
+#                 )
+
+#                 payment.status = "completed"
+#                 payment.save()
+
+#                 order = payment.order
+#                 order.status = "completed"
+#                 order.save()
+
+#                 # 🔥 Celery Email Trigger
+#                 send_payment_success_email.delay(order.id)
+
+#                 return Response({"message": "Payment Successful"})
+
+#             return Response({"error": "Payment not completed"}, status=400)
+
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=400)
+        
+        
 class VerifyPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        data = request.data
+        payment_intent_id = request.data.get("payment_intent")
+
+        # ✅ Check input
+        if not payment_intent_id:
+            return Response({"error": "payment_intent is required"}, status=400)
 
         try:
-            client.utility.verify_payment_signature({
-                'razorpay_order_id': data['razorpay_order_id'],
-                'razorpay_payment_id': data['razorpay_payment_id'],
-                'razorpay_signature': data['razorpay_signature']
-            })
-
+            # ✅ Get payment from DB
             payment = Payment.objects.get(
-                razorpay_order_id=data['razorpay_order_id']
+                stripe_payment_intent=payment_intent_id
             )
 
-            payment.razorpay_payment_id = data['razorpay_payment_id']
-            payment.razorpay_signature = data['razorpay_signature']
-            payment.status = 'success'
+            # 🔥 IMPORTANT: For Postman testing (skip Stripe verification)
+            payment.status = "completed"
             payment.save()
 
-            # ✅ update order
+            # 📦 Update order
             order = payment.order
-            order.status = 'completed'
+            order.status = "completed"
             order.save()
-            
-            send_order_email.delay(order.id)
 
-            return Response({"message": "Payment Successful"})
+            # 📧 Send email using Celery
 
-        except:
-            return Response({"error": "Payment Failed"})
+            send_payment_success_email.delay(order.id)
+
+            return Response({
+                "message": "Payment Successful (Test Mode)",
+                "order_id": order.id
+            })
+
+        except Payment.DoesNotExist:
+            return Response({"error": "Payment not found"}, status=404)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)

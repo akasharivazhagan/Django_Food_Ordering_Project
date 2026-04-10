@@ -18,8 +18,10 @@ class CartSerializer(serializers.ModelSerializer):
 
 
 class AddToCartSerializer(serializers.Serializer):
+    restaurant_id = serializers.IntegerField()
     food_id = serializers.IntegerField()
     quantity = serializers.IntegerField()
+
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -34,3 +36,6 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+        
+class CreateOrderSerializer(serializers.Serializer):
+    cart_id = serializers.IntegerField()
