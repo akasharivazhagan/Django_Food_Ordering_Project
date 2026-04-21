@@ -4,17 +4,20 @@ from restaurants.models import Food
 
 
 class CartItemSerializer(serializers.ModelSerializer):
+    food = serializers.CharField(source='food.name')
+
     class Meta:
         model = CartItem
-        fields = '__all__'
-
+        fields = ['food', 'quantity']
 
 class CartSerializer(serializers.ModelSerializer):
-    items = CartItemSerializer(many=True, read_only=True)
+    cart_id = serializers.IntegerField(source='id')
+    restaurant = serializers.CharField(source='restaurant.name')
+    items = CartItemSerializer(many=True)
 
     class Meta:
         model = Cart
-        fields = '__all__'
+        fields = ['cart_id', 'restaurant', 'items']
 
 
 class AddToCartSerializer(serializers.Serializer):
@@ -39,3 +42,9 @@ class OrderSerializer(serializers.ModelSerializer):
         
 class CreateOrderSerializer(serializers.Serializer):
     cart_id = serializers.IntegerField()
+    
+        
+class AddToCartResponseSerializer(serializers.Serializer):
+    cart_id = serializers.IntegerField()
+    food = serializers.CharField()
+    quantity = serializers.IntegerField()

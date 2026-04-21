@@ -43,9 +43,7 @@ class RevenueView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUserCustom]
 
     def get(self, request):
-        total = Order.objects.filter(status='completed').aggregate(
-            total_revenue=Sum('total_amount')
-        )
+        total = Order.objects.filter(status='completed').aggregate(total_revenue=Sum('total_amount'))
         return Response(total)
 
 
@@ -64,9 +62,6 @@ class TopRestaurantsView(APIView):
 
     def get(self, request):
         data = (
-            Order.objects
-            .values('items__food__restaurant__name')
-            .annotate(total_orders=Count('id'))
-            .order_by('-total_orders')[:5]
+            Order.objects.values('items__food__restaurant__name').annotate(total_orders=Count('id')).order_by('-total_orders')[:5]
         )
         return Response(data)

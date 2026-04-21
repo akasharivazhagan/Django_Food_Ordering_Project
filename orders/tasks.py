@@ -20,9 +20,6 @@ def send_order_email(order_id):
     return "Email Sent"
 
 
-
-
-
 @shared_task
 def send_payment_success_email(order_id):
     try:

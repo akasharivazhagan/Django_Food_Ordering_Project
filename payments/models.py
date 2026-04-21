@@ -9,4 +9,4 @@ class Payment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.stripe_payment_intent
+        return f"Payment for Order {self.order.id}: {self.stripe_payment_intent}, Status: {self.status}, Amount: ₹{self.amount},created at: {self.created_at}"

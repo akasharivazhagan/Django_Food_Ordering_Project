@@ -33,8 +33,7 @@ class CreatePaymentView(APIView):
 
         return Response({
             "client_secret": intent['client_secret'],
-            "payment_intent": intent['id'],
-            "publishable_key": settings.STRIPE_PUBLISHABLE_KEY
+            "payment_intent": intent['id']
         })
     
     

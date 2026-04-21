@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'accounts', 'restaurants', 'orders', 'payments'
+    'accounts', 'restaurants', 'orders', 'payments',
+    'django_extensions',
 ]
 
 MIDDLEWARE = [

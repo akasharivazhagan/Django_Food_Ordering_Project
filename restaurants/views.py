@@ -82,18 +82,6 @@ class FoodCreateView(CreateAPIView):
     serializer_class = FoodSerializer
     permission_classes = [IsAuthenticated, IsAdminUserCustom]
     
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
-
-        return Response(
-            {
-                "status": "success",
-                "message": "Deleted successfully"
-            },
-            status=status.HTTP_200_OK
-        )
-
 
 # 📜 LIST Food (Admin)
 class FoodAdminListView(ListAPIView):
@@ -121,6 +109,18 @@ class FoodDeleteView(DestroyAPIView):
     queryset = Food.objects.all()
     serializer_class = FoodSerializer
     permission_classes = [IsAuthenticated, IsAdminUserCustom]
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Deleted successfully"
+            },
+            status=status.HTTP_200_OK
+        )
 
     
 
